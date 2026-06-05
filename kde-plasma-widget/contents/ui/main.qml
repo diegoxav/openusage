@@ -4,13 +4,11 @@ import org.kde.plasma.core as PlasmaCore
 import org.kde.plasma.plasmoid
 import org.kde.kirigami as Kirigami
 
-Item {
+PlasmoidItem {
     id: root
 
     // Tell the panel how big we want to be
-    Plasmoid.preferredWidth: rowLayout.implicitWidth
-    // Ensure height matches panel height
-    Plasmoid.preferredHeight: Plasmoid.compactRepresentationHeight
+    Layout.preferredWidth: rowLayout.implicitWidth
 
     property string statusText: "Agy: --%"
 
@@ -73,27 +71,46 @@ Item {
         }
 
         if (chosenSnapshot && chosenSnapshot.lines && chosenSnapshot.lines.length > 0) {
-            // Find the first progress line (which holds the primary metric)
+            var bestLine = null;
             for (var k = 0; k < chosenSnapshot.lines.length; k++) {
                 var line = chosenSnapshot.lines[k];
-                if (line.type === "progress" || line.value !== undefined) {
-                    var name = chosenSnapshot.displayName || chosenSnapshot.providerId;
-                    if (name.toLowerCase() === "antigravity") {
-                        name = "Agy";
+                if (line.type === "progress") {
+                    var val = line.used !== undefined ? line.used : line.value;
+                    var maxVal = line.limit !== undefined ? line.limit : line.max;
+                    var valNum = parseFloat(val);
+                    var maxNum = parseFloat(maxVal);
+                    if (!isNaN(valNum) && !isNaN(maxNum) && maxNum > 0) {
+                        var percent = Math.round((valNum / maxNum) * 100);
+                        if (percent < 100) {
+                            bestLine = { line: line, percent: percent };
+                            break;
+                        }
+                        if (!bestLine) {
+                            bestLine = { line: line, percent: percent };
+                        }
                     }
-                    var percent = Math.round((line.value / line.max) * 100);
-                    statusText = name + ": " + percent + "%";
-                    return;
                 }
+            }
+            if (bestLine) {
+                var name = chosenSnapshot.displayName || chosenSnapshot.providerId;
+                if (name.toLowerCase() === "antigravity") {
+                    name = "Agy";
+                }
+                statusText = name + ": " + bestLine.percent + "%";
+                return;
             }
         }
 
         statusText = "OpenUsage";
     }
 
-    function toggleWindow() {
+    function toggleWindow(x, y) {
         var xhr = new XMLHttpRequest();
-        xhr.open("POST", "http://127.0.0.1:6736/v1/toggle-window");
+        var url = "http://127.0.0.1:6736/v1/toggle-window";
+        if (x !== undefined && y !== undefined) {
+            url += "?x=" + Math.round(x) + "&y=" + Math.round(y);
+        }
+        xhr.open("POST", url);
         xhr.send();
     }
 
@@ -101,8 +118,9 @@ Item {
     MouseArea {
         anchors.fill: parent
         cursorShape: Qt.PointingHandCursor
-        onClicked: {
-            toggleWindow()
+        onClicked: (mouse) => {
+            var globalPos = mapToGlobal(mouse.x, mouse.y);
+            toggleWindow(globalPos.x, globalPos.y);
         }
     }
 
@@ -115,8 +133,8 @@ Item {
         Kirigami.Icon {
             id: icon
             source: "preferences-system-network-sharing"
-            Layout.width: parent.height - 8
-            Layout.height: parent.height - 8
+            Layout.preferredWidth: parent.height - 8
+            Layout.preferredHeight: parent.height - 8
             Layout.alignment: Qt.AlignVCenter
         }
 
@@ -124,7 +142,7 @@ Item {
         Text {
             id: label
             text: statusText
-            color: theme.textColor
+            color: Kirigami.Theme.textColor
             font.pixelSize: 13
             font.weight: Font.DemiBold
             Layout.alignment: Qt.AlignVCenter

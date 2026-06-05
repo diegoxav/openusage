@@ -1,13 +1,9 @@
-#[cfg(target_os = "macos")]
-mod app_nap;
 mod config;
 mod local_http_api;
 mod log_path;
 mod panel;
 mod plugin_engine;
 mod tray;
-#[cfg(target_os = "macos")]
-mod webkit_config;
 
 use std::collections::{HashMap, HashSet, VecDeque};
 use std::path::PathBuf;
@@ -134,7 +130,7 @@ fn handle_global_shortcut(
 ) {
     if event.state == ShortcutState::Pressed {
         log::debug!("Global shortcut triggered");
-        panel::toggle_panel(app);
+        panel::toggle_panel(app, None);
     }
 }
 
@@ -494,6 +490,16 @@ fn list_plugins(state: tauri::State<'_, Mutex<AppState>>) -> Vec<PluginMeta> {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "linux")]
+    {
+        // Force GDK to use the X11 backend so that absolute window positioning (set_position)
+        // works reliably under Wayland sessions via XWayland. Wayland native clients are
+        // not allowed by the compositor to position their own windows.
+        unsafe {
+            std::env::set_var("GDK_BACKEND", "x11");
+        }
+    }
+
     let runtime = tokio::runtime::Runtime::new().expect("Failed to create Tokio runtime");
     let _guard = runtime.enter();
 
@@ -529,18 +535,6 @@ pub fn run() {
             update_global_shortcut
         ])
         .setup(|app| {
-            #[cfg(target_os = "macos")]
-            app.handle().plugin(tauri_nspanel::init())?;
-
-            #[cfg(target_os = "macos")]
-            app.set_activation_policy(tauri::ActivationPolicy::Accessory);
-
-            #[cfg(target_os = "macos")]
-            {
-                app_nap::disable_app_nap();
-                webkit_config::disable_webview_suspension(app.handle());
-            }
-
             use tauri::Manager;
 
             let version = app.package_info().version.to_string();

@@ -163,15 +163,15 @@ pub fn create(app_handle: &AppHandle) -> tauri::Result<()> {
             log::debug!("tray menu: {}", event.id.as_ref());
             match event.id.as_ref() {
                 "show_stats" => {
-                    show_panel(app_handle);
+                    show_panel(app_handle, None);
                     let _ = app_handle.emit("tray:navigate", "home");
                 }
                 "go_to_settings" => {
-                    show_panel(app_handle);
+                    show_panel(app_handle, None);
                     let _ = app_handle.emit("tray:navigate", "settings");
                 }
                 "about" => {
-                    show_panel(app_handle);
+                    show_panel(app_handle, None);
                     let _ = app_handle.emit("tray:show-about", ());
                 }
                 "quit" => {

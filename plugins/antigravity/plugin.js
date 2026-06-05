@@ -107,23 +107,47 @@
         "SELECT value FROM ItemTable WHERE key = '" + OAUTH_TOKEN_KEY + "' LIMIT 1"
       )
       var parsed = ctx.util.tryParseJson(rows)
-      if (!parsed || !parsed.length || !parsed[0].value) return null
-      var inner = unwrapOAuthSentinel(ctx, parsed[0].value)
-      if (!inner) return null
-      var fields = readFields(inner)
-      var accessToken = (fields[1] && fields[1].type === 2) ? fields[1].data : null
-      var refreshToken = (fields[3] && fields[3].type === 2) ? fields[3].data : null
-      var expirySeconds = null
-      if (fields[4] && fields[4].type === 2) {
-        var ts = readFields(fields[4].data)
-        if (ts[1] && ts[1].type === 0) expirySeconds = ts[1].value
+      if (parsed && parsed.length && parsed[0].value) {
+        var inner = unwrapOAuthSentinel(ctx, parsed[0].value)
+        if (inner) {
+          var fields = readFields(inner)
+          var accessToken = (fields[1] && fields[1].type === 2) ? fields[1].data : null
+          var refreshToken = (fields[3] && fields[3].type === 2) ? fields[3].data : null
+          var expirySeconds = null
+          if (fields[4] && fields[4].type === 2) {
+            var ts = readFields(fields[4].data)
+            if (ts[1] && ts[1].type === 0) expirySeconds = ts[1].value
+          }
+          if (accessToken || refreshToken) {
+            return { accessToken: accessToken, refreshToken: refreshToken, expirySeconds: expirySeconds }
+          }
+        }
       }
-      if (!accessToken && !refreshToken) return null
-      return { accessToken: accessToken, refreshToken: refreshToken, expirySeconds: expirySeconds }
     } catch (e) {
       ctx.host.log.warn("failed to read unified oauth token from " + dbPath + ": " + String(e))
-      return null
     }
+
+    try {
+      var rows2 = ctx.host.sqlite.query(
+        dbPath,
+        "SELECT value FROM ItemTable WHERE key = 'antigravityAuthStatus' LIMIT 1"
+      )
+      var parsed2 = ctx.util.tryParseJson(rows2)
+      if (parsed2 && parsed2.length && parsed2[0].value) {
+        var authObj = ctx.util.tryParseJson(parsed2[0].value)
+        if (authObj && typeof authObj === "object") {
+          var apiKey = typeof authObj.apiKey === "string" ? authObj.apiKey.trim() : ""
+          if (apiKey) {
+            ctx.host.log.info("found active apiKey in antigravityAuthStatus from " + dbPath)
+            return { accessToken: apiKey, refreshToken: null, expirySeconds: null }
+          }
+        }
+      }
+    } catch (e) {
+      ctx.host.log.warn("failed to read apiKey from " + dbPath + ": " + String(e))
+    }
+
+    return null
   }
 
   function loadOAuthTokenCandidates(ctx) {
@@ -403,14 +427,31 @@
       var label = (typeof c.label === "string") ? c.label.trim() : ""
       if (!label) continue
       var qi = c.quotaInfo
-      var frac = (qi && typeof qi.remainingFraction === "number") ? qi.remainingFraction : 0
+      var hasQuota = !!(qi && typeof qi.remainingFraction === "number")
+      var frac = hasQuota ? qi.remainingFraction : 0
       var rtime = (qi && qi.resetTime) || undefined
       var pool = poolLabel(normalizeLabel(label))
-      if (!deduped[pool] || frac < deduped[pool].remainingFraction) {
+      
+      var current = deduped[pool]
+      var shouldUpdate = false
+      if (!current) {
+        shouldUpdate = true
+      } else {
+        if (!current.hasQuota && hasQuota) {
+          shouldUpdate = true
+        } else if (current.hasQuota && hasQuota) {
+          if (frac < current.remainingFraction) {
+            shouldUpdate = true
+          }
+        }
+      }
+
+      if (shouldUpdate) {
         deduped[pool] = {
           label: pool,
           remainingFraction: frac,
           resetTime: rtime,
+          hasQuota: hasQuota,
         }
       }
     }
@@ -636,12 +677,29 @@
 
   // --- Probe ---
 
+  function allGeminiModelsDepleted(lines) {
+    if (!lines || lines.length === 0) return true;
+    var hasGemini = false;
+    for (var i = 0; i < lines.length; i++) {
+      var l = lines[i];
+      if (l.label && l.label.indexOf("Gemini") !== -1) {
+        hasGemini = true;
+        if (l.used !== 100) {
+          return false;
+        }
+      }
+    }
+    return hasGemini;
+  }
+
   function probe(ctx) {
     var lsResult = probeLs(ctx)
-    if (lsResult) return lsResult
+    if (lsResult && !allGeminiModelsDepleted(lsResult.lines)) return lsResult
 
     var agyLsResult = probeAgyLs(ctx)
-    if (agyLsResult) return agyLsResult
+    if (agyLsResult && !allGeminiModelsDepleted(agyLsResult.lines)) return agyLsResult
+
+    var fallbackResult = lsResult || agyLsResult
 
     var dbTokenCandidates = loadOAuthTokenCandidates(ctx)
 
@@ -704,6 +762,8 @@
       var lines = buildModelLines(ctx, configs)
       if (lines.length > 0) return { plan: null, lines: lines }
     }
+
+    if (fallbackResult) return fallbackResult
 
     throw LOGIN_MESSAGE
   }

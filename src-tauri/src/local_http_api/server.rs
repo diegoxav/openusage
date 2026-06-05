@@ -128,16 +128,16 @@ fn handle_connection(mut stream: TcpStream, _permit: ConnectionPermit) {
         path
     };
 
-    let response = route(method, path);
+    let response = route(method, path, raw_path);
     let _ = stream.write_all(response.as_bytes());
     let _ = stream.flush();
 }
 
-fn route(method: &str, path: &str) -> String {
+fn route(method: &str, path: &str, raw_path: &str) -> String {
     // Match routes
     if path == "/v1/toggle-window" {
         return match method {
-            "POST" | "GET" => handle_post_toggle_window(),
+            "POST" | "GET" => handle_post_toggle_window(raw_path),
             "OPTIONS" => response_no_content(),
             _ => response_method_not_allowed(),
         };
@@ -164,11 +164,36 @@ fn route(method: &str, path: &str) -> String {
     response_not_found("not_found")
 }
 
-fn handle_post_toggle_window() -> String {
+fn handle_post_toggle_window(raw_path: &str) -> String {
     if let Some(app_handle) = APP_HANDLE.get() {
         let handle = app_handle.clone();
+        
+        let mut click_coords = None;
+        if let Some(query_idx) = raw_path.find('?') {
+            let query = &raw_path[query_idx + 1..];
+            let mut x_val = None;
+            let mut y_val = None;
+            for pair in query.split('&') {
+                let mut parts = pair.splitn(2, '=');
+                let key = parts.next().unwrap_or("");
+                let val = parts.next().unwrap_or("");
+                if key == "x" {
+                    if let Ok(x) = val.parse::<f64>() {
+                        x_val = Some(x);
+                    }
+                } else if key == "y" {
+                    if let Ok(y) = val.parse::<f64>() {
+                        y_val = Some(y);
+                    }
+                }
+            }
+            if let (Some(x), Some(y)) = (x_val, y_val) {
+                click_coords = Some((x, y));
+            }
+        }
+
         let _ = app_handle.run_on_main_thread(move || {
-            crate::panel::toggle_panel(&handle);
+            crate::panel::toggle_panel(&handle, click_coords);
         });
         response_json(200, "OK", r#"{"status":"ok"}"#)
     } else {

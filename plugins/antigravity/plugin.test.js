@@ -406,7 +406,7 @@ describe("antigravity plugin", () => {
     expect(result.lines.find((l) => l.label === "Gemini Pro")).toBeTruthy()
   })
 
-  it("dedup picks depleted variant (no quotaInfo) over non-depleted sibling", async () => {
+  it("dedup picks non-depleted variant over depleted sibling with no quotaInfo", async () => {
     const ctx = makeCtx()
     const discovery = makeDiscovery()
     const response = makeUserStatusResponse({
@@ -421,8 +421,8 @@ describe("antigravity plugin", () => {
     const result = plugin.probe(ctx)
     const pro = result.lines.find((l) => l.label === "Gemini Pro")
     expect(pro).toBeTruthy()
-    expect(pro.used).toBe(100)
-    expect(pro.resetsAt).toBeUndefined()
+    expect(pro.used).toBe(25) // (1 - 0.75) * 100
+    expect(pro.resetsAt).toBe("2026-02-08T09:10:56Z")
   })
 
   it("returns lines when all models are depleted (no quotaInfo)", async () => {
