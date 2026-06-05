@@ -2,7 +2,7 @@ use super::cache::{cache_state, enabled_snapshots_ordered};
 use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::atomic::{AtomicUsize, Ordering};
-use std::sync::Arc;
+use std::sync::{Arc, OnceLock};
 use std::time::Duration;
 
 const BIND_ADDR: &str = "127.0.0.1:6736";
@@ -60,7 +60,10 @@ impl Drop for ConnectionPermit {
 // HTTP server
 // ---------------------------------------------------------------------------
 
-pub fn start_server() {
+static APP_HANDLE: OnceLock<tauri::AppHandle> = OnceLock::new();
+
+pub fn start_server(app_handle: tauri::AppHandle) {
+    let _ = APP_HANDLE.set(app_handle);
     std::thread::spawn(|| {
         let listener = match TcpListener::bind(BIND_ADDR) {
             Ok(l) => {
@@ -132,6 +135,14 @@ fn handle_connection(mut stream: TcpStream, _permit: ConnectionPermit) {
 
 fn route(method: &str, path: &str) -> String {
     // Match routes
+    if path == "/v1/toggle-window" {
+        return match method {
+            "POST" | "GET" => handle_post_toggle_window(),
+            "OPTIONS" => response_no_content(),
+            _ => response_method_not_allowed(),
+        };
+    }
+
     if path == "/v1/usage" {
         return match method {
             "GET" => handle_get_usage_collection(),
@@ -151,6 +162,18 @@ fn route(method: &str, path: &str) -> String {
     }
 
     response_not_found("not_found")
+}
+
+fn handle_post_toggle_window() -> String {
+    if let Some(app_handle) = APP_HANDLE.get() {
+        let handle = app_handle.clone();
+        let _ = app_handle.run_on_main_thread(move || {
+            crate::panel::toggle_panel(&handle);
+        });
+        response_json(200, "OK", r#"{"status":"ok"}"#)
+    } else {
+        response_service_unavailable()
+    }
 }
 
 fn handle_get_usage_collection() -> String {

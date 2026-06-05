@@ -201,10 +201,7 @@ fn init_panel(app_handle: tauri::AppHandle) {
 
 #[tauri::command]
 fn hide_panel(app_handle: tauri::AppHandle) {
-    use tauri_nspanel::ManagerExt;
-    if let Ok(panel) = app_handle.get_webview_panel("main") {
-        panel.hide();
-    }
+    panel::hide_panel(&app_handle);
 }
 
 #[tauri::command]
@@ -505,7 +502,6 @@ pub fn run() {
         .plugin(tauri_plugin_opener::init())
         .plugin(tauri_plugin_clipboard_manager::init())
         .plugin(tauri_plugin_store::Builder::default().build())
-        .plugin(tauri_nspanel::init())
         .plugin(
             tauri_plugin_log::Builder::new()
                 .targets([
@@ -533,6 +529,9 @@ pub fn run() {
             update_global_shortcut
         ])
         .setup(|app| {
+            #[cfg(target_os = "macos")]
+            app.handle().plugin(tauri_nspanel::init())?;
+
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
@@ -578,7 +577,7 @@ pub fn run() {
             }));
 
             local_http_api::init(&app_data_dir, known_plugin_ids);
-            local_http_api::start_server();
+            local_http_api::start_server(app.handle().clone());
 
             tray::create(app.handle())?;
 

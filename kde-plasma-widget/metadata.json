@@ -1,0 +1,23 @@
+{
+    "KPlugin": {
+        "Name": "OpenUsage",
+        "Description": "Monitora limites e cotas de uso de IAs e ferramentas de codificação",
+        "Icon": "preferences-system-network-sharing",
+        "Category": "Utilities",
+        "ServiceTypes": [
+            "Plasma/Applet"
+        ],
+        "Id": "com.github.diegoxav.openusage",
+        "Version": "1.0.0",
+        "Authors": [
+            {
+                "Name": "Diego Xavier",
+                "Email": "xavierrs@gmail.com"
+            }
+        ],
+        "Website": "https://github.com/diegoxav/openusage"
+    },
+    "PlasmaProperties": {
+        "RequiresParentProperty": true
+    }
+}
