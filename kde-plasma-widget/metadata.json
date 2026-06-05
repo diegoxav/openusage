@@ -4,9 +4,6 @@
         "Description": "Monitora limites e cotas de uso de IAs e ferramentas de codificação",
         "Icon": "preferences-system-network-sharing",
         "Category": "Utilities",
-        "ServiceTypes": [
-            "Plasma/Applet"
-        ],
         "Id": "com.github.diegoxav.openusage",
         "Version": "1.0.0",
         "Authors": [
@@ -17,7 +14,6 @@
         ],
         "Website": "https://github.com/diegoxav/openusage"
     },
-    "PlasmaProperties": {
-        "RequiresParentProperty": true
-    }
+    "KPackageStructure": "Plasma/Applet",
+    "X-Plasma-API-Minimum-Version": "6.0"
 }

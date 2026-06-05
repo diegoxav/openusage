@@ -1,7 +1,8 @@
-import QtQuick 2.15
-import QtQuick.Layouts 1.15
-import org.kde.plasma.core 2.0 as PlasmaCore
-import org.kde.plasma.plasmoid 2.0
+import QtQuick
+import QtQuick.Layouts
+import org.kde.plasma.core as PlasmaCore
+import org.kde.plasma.plasmoid
+import org.kde.kirigami as Kirigami
 
 Item {
     id: root
@@ -110,8 +111,8 @@ Item {
         anchors.fill: parent
         spacing: 6
 
-        // Tray Icon
-        PlasmaCore.IconItem {
+        // Tray Icon (Kirigami.Icon is the Plasma 6 standard)
+        Kirigami.Icon {
             id: icon
             source: "preferences-system-network-sharing"
             Layout.width: parent.height - 8
